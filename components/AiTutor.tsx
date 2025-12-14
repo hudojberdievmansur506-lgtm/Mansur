@@ -1,14 +1,52 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from '@google/genai';
 import { MessageSquare, X, Send, Bot, User } from 'lucide-react';
-import { ChatMessage } from '../types';
+import { ChatMessage, Language } from '../types';
 
-export const AiTutor: React.FC = () => {
+interface AiTutorProps {
+  language: Language;
+}
+
+const GREETINGS = {
+  uz: "Assalomu alaykum! Men GDPI virtual yordamchisiman. Sun'iy intellekt bo'yicha qanday savolingiz bor?",
+  ru: "Здравствуйте! Я виртуальный помощник ГГПИ. Какой у вас вопрос по искусственному интеллекту?",
+  en: "Hello! I am the GSPI virtual assistant. What question do you have about artificial intelligence?"
+};
+
+const SYSTEM_PROMPTS = {
+  uz: "Siz Guliston Davlat Pedagogika Instituti talabalari uchun yordamchi o'qituvchisiz. Javoblaringiz qisqa, aniq va do'stona bo'lsin. O'zbek tilida javob bering.",
+  ru: "Вы помощник преподавателя для студентов Гулистанского государственного педагогического института. Ваши ответы должны быть краткими, четкими и дружелюбными. Отвечайте на русском языке.",
+  en: "You are a teaching assistant for students of Gulistan State Pedagogical Institute. Keep your answers short, clear, and friendly. Answer in English."
+};
+
+const ERROR_MSGS = {
+  uz: "Xatolik yuz berdi. Iltimos qayta urinib ko'ring.",
+  ru: "Произошла ошибка. Пожалуйста, попробуйте еще раз.",
+  en: "An error occurred. Please try again."
+};
+
+const WAIT_MSGS = {
+    uz: "Uzr, hozir javob bera olmayman.",
+    ru: "Извините, я не могу ответить прямо сейчас.",
+    en: "Sorry, I cannot answer right now."
+}
+
+export const AiTutor: React.FC<AiTutorProps> = ({ language }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [input, setInput] = useState('');
+  // Reset messages when language changes, or just keep history? Let's reset for clarity or just append a new greeting.
+  // For simplicity, we initialize with the current language greeting, but if lang changes, we don't automatically clear chat unless intended.
   const [messages, setMessages] = useState<ChatMessage[]>([
-    { role: 'model', text: "Assalomu alaykum! Men GDPI virtual yordamchisiman. Sun'iy intellekt bo'yicha qanday savolingiz bor?" }
+    { role: 'model', text: GREETINGS['uz'] } 
   ]);
+  
+  // Update greeting if language changes and chat hasn't started essentially (length 1)
+  useEffect(() => {
+     if (messages.length === 1 && messages[0].role === 'model') {
+         setMessages([{ role: 'model', text: GREETINGS[language] }]);
+     }
+  }, [language]);
+
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -31,23 +69,22 @@ export const AiTutor: React.FC = () => {
     try {
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       
-      // Use standard generateContent for this simple chat interface
       const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: [
-            { role: 'user', parts: [{ text: `You are a helpful AI tutor for Gulistan State Pedagogical Institute. Answer in Uzbek language. User asks: ${userMessage}` }] }
+            { role: 'user', parts: [{ text: `User asks: ${userMessage}` }] }
         ],
         config: {
-            systemInstruction: "Siz Guliston Davlat Pedagogika Instituti talabalari uchun yordamchi o'qituvchisiz. Javoblaringiz qisqa, aniq va do'stona bo'lsin.",
+            systemInstruction: SYSTEM_PROMPTS[language],
         }
       });
 
-      const text = response.text || "Uzr, hozir javob bera olmayman.";
+      const text = response.text || WAIT_MSGS[language];
       
       setMessages(prev => [...prev, { role: 'model', text }]);
     } catch (error) {
       console.error("AI Error:", error);
-      setMessages(prev => [...prev, { role: 'model', text: "Xatolik yuz berdi. Iltimos qayta urinib ko'ring." }]);
+      setMessages(prev => [...prev, { role: 'model', text: ERROR_MSGS[language] }]);
     } finally {
       setIsLoading(false);
     }
@@ -71,7 +108,7 @@ export const AiTutor: React.FC = () => {
           <div className="bg-blue-600 p-4 flex justify-between items-center text-white">
             <div className="flex items-center gap-2">
               <Bot size={20} />
-              <h3 className="font-bold">GDPI AI Yordamchi</h3>
+              <h3 className="font-bold">GDPI AI {language === 'uz' ? 'Yordamchi' : language === 'ru' ? 'Помощник' : 'Assistant'}</h3>
             </div>
             <button onClick={() => setIsOpen(false)} className="hover:bg-blue-700 p-1 rounded">
               <X size={20} />
@@ -115,7 +152,7 @@ export const AiTutor: React.FC = () => {
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && handleSend()}
-                placeholder="Savolingizni yozing..."
+                placeholder={language === 'uz' ? "Savolingizni yozing..." : language === 'ru' ? "Напишите свой вопрос..." : "Type your question..."}
                 className="flex-1 px-4 py-2 border border-slate-300 rounded-full text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
               />
               <button 
